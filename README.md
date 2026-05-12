@@ -10,7 +10,7 @@
 ## Estructura
 
 - `bloque_0/` - Ejercicios del bloque autónomo
-- ` bloque_1/`- Ejercicios introduccion a docker
+- `bloque_1/`- Ejercicios introduccion a docker
 - `bloque_2/` - Ejercicios docker aplicado
 - `bloque_3/` - Ejercicios procesos
 - `tp1/` - Trabajo Práctico 1
