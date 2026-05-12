@@ -1,1 +1,19 @@
 
+#EJERCICIO 2.1: 
+#¿Siempre se imprimen los mensajes en el mismo orden? No. Después de os.fork() existen dos procesos (padre e hijo) ejecutándose al mismo tiempo. El sistema operativo decide cuál se ejecuta primero, por eso el orden puede cambiar.
+#¿Por qué el último mensaje aparece dos veces? Porque después del fork() tanto el padre como el hijo continúan ejecutando el mismo código. Entonces ambos ejecutan el último print, cada uno con su propio PID.
+
+#EJERCICIO 2.2
+#¿Qué pasa si cambiás os._exit(42) por os._exit(0)?
+#El padre recibirá el código de salida 0, que indica que el proceso hijo terminó exitosamente.
+
+#EJERCICIO 4.3
+#¿Por qué cd debe ser un comando interno del shell y no un programa externo?
+#Porque cd necesita cambiar el directorio del proceso del shell actual. Si fuera un programa externo, se ejecutaría en un proceso hijo creado con fork(), y el cambio de directorio solo afectaría al hijo. Cuando el hijo terminara, el shell seguiría en el mismo directorio.
+
+#EJERCICIO 6
+#¿Qué versión es más simple? La versión con subprocess es más simple porque Python maneja automáticamente la creación y espera de procesos.
+
+#¿Cuál te da más control? La versión con fork() y exec() da más control porque permite manejar directamente los procesos y su comportamiento.
+
+#¿Cuándo usarías cada una? Usaría subprocess para programas comunes y scripts simples, y fork() + exec() cuando necesite un manejo más avanzado de procesos o entender cómo funcionan internamente.
