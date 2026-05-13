@@ -1,0 +1,7 @@
+total 24
+drwxrwxr-x 2 nicole nicole 4096 may 13 11:47 .
+drwxrwxr-x 7 nicole nicole 4096 may 13 11:31 ..
+-rw-r--r-- 1 nicole nicole    0 may 13 11:47 listado.txt
+-rw-rw-r-- 1 nicole nicole 4110 may 13 11:31 minishell.py
+-rw-r--r-- 1 nicole nicole    5 may 13 11:34 saludo.txt
+-rw-r--r-- 1 nicole nicole   13 may 13 11:47 test.txt
