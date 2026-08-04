@@ -151,7 +151,7 @@ mediante el patrón **Self-Pipe Trick**, evitando corrupción del estado interno
 
 ---
 
-## 📈 Cálculo del CPU%
+##  Cálculo del CPU%
 
 El porcentaje de CPU se calcula mediante diferencias entre dos muestras consecutivas de:
 
@@ -185,17 +185,33 @@ El kernel limita el nombre almacenado en `/proc/[pid]/stat` a **16 caracteres**,
 
 #  Cómo Ejecutar el Proyecto
 
-## 1. Construcción
+## Método recomendado
+
+Como la aplicación utiliza una interfaz interactiva basada en `curses`, se recomienda iniciarla directamente con:
 
 ```bash
-docker compose up -d --build
+docker compose run --rm monitor
 ```
 
-## 2. Conectarse a la TUI
+Este comando conecta automáticamente la terminal al programa, permitiendo que la TUI funcione correctamente.
+
+---
+
+## Método alternativo
+
+También es posible construir e iniciar el contenedor con:
+
+```bash
+docker compose up --build
+```
+
+y luego conectarse desde otra terminal mediante:
 
 ```bash
 docker attach monitor_proc_tui
 ```
+
+Sin embargo, **este método no se recomienda para la TUI**, ya que en algunos entornos la salida de `curses` no se renderiza correctamente y la pantalla puede actualizarse línea por línea, haciendo que el contenido del resumen se imprima indefinidamente en lugar de refrescarse.
 
 ---
 
@@ -258,10 +274,6 @@ Esto mantiene el contexto del sistema mientras se inspecciona información detal
 
 # Lo que Aprendí
 
-El desarrollo de este monitor permitió comprender cómo herramientas como **top** obtienen información directamente del sistema de archivos virtual `/proc`.
+El desarrollo de este proyecto me permitió comprender mucho mejor cómo se aplican en la práctica los conceptos vistos durante la materia. Trabajar directamente con el sistema de archivos virtual `/proc` me ayudó a entender cómo obtener información sobre el estado de los procesos, el uso de memoria, los hilos, los descriptores de archivos, las señales y la planificación del CPU, sin depender de bibliotecas de alto nivel. También pude ver cómo herramientas como `top` o `htop` construyen la información que muestran a partir de los datos que expone el kernel y entender que muchas de las métricas no están disponibles de forma directa, sino que deben calcularse o interpretarse a partir de la información que proporciona el sistema.
 
-También reforzó el concepto clásico de Unix:
-
-> **"Todo es un archivo."**
-
-Desde el punto de vista de la arquitectura de software, el mayor aprendizaje estuvo en el manejo de concurrencia, la comunicación entre procesos mediante `multiprocessing` y la integración segura de señales utilizando el patrón **Self-Pipe Trick**, logrando una aplicación interactiva robusta y con refresco en tiempo real.
+Por otro lado, diseñar una aplicación formada por varios procesos me permitió aplicar conceptos de concurrencia, comunicación entre procesos (IPC) y sincronización para que todos los componentes trabajaran de forma coordinada. Durante el desarrollo aprendí la importancia de definir claramente qué proceso es responsable de leer o modificar cada dato compartido para evitar condiciones de carrera y comportamientos inconsistentes. Además, implementar el manejo de señales para realizar un cierre limpio, recargar la configuración y generar snapshots me permitió comprender mejor cómo responder a eventos del sistema sin afectar el funcionamiento de una aplicación interactiva.
