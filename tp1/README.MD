@@ -1,7 +1,7 @@
-# 🖥️ Monitor de Procesos y Sistema en Tiempo Real
+#  Monitor de Procesos y Sistema en Tiempo Real
 ### TP1 - Computación II
 
-## 📌 Descripción General
+##  Descripción General
 
 Este proyecto es un monitor interactivo de procesos y métricas del sistema operativo Linux que funciona directamente desde la terminal (TUI).
 
@@ -20,36 +20,55 @@ El usuario puede:
 
 ---
 
-# 🏗️ Diagrama de Arquitectura
+#  Arquitectura
 
-El sistema se divide en procesos independientes que ejecutan tareas específicas de recolección y renderizado, comunicándose mediante memoria compartida y un mecanismo seguro de señales.
+El sistema está compuesto por tres procesos principales que comparten información mediante memoria compartida.
 
-```mermaid
-graph TD
-    classDef mainNode fill:#1f2937,stroke:#3b82f6,stroke-width:2px,color:#fff;
-    classDef subNode fill:#111827,stroke:#10b981,stroke-width:2px,color:#fff;
-    classDef ipcNode fill:#374151,stroke:#f59e0b,stroke-width:2px,color:#fff;
+| Componente | Función |
+|------------|---------|
+| **Proceso Principal (`main`)** | Inicializa la memoria compartida, crea los subprocesos y captura señales del sistema (SIGINT, SIGHUP, SIGUSR1, SIGUSR2). |
+| **Worker (Recolector)** | Lee la información de `/proc`, calcula las métricas (CPU, memoria, hilos, etc.) y actualiza el estado compartido. |
+| **UI (TUI)** | Muestra la información en pantalla utilizando `curses`, recibe la entrada del usuario y permite cambiar vistas, filtros y ordenamientos. |
+| **Memoria Compartida** | Almacena las métricas (`snapshot_dict`), los intervalos de actualización y el estado de ejecución para que ambos procesos puedan comunicarse. |
 
-    MAIN["PROCESO PRINCIPAL (main)<br/>• Inicializa memoria compartida y Self-Pipe<br/>• Captura señales (SIGINT, SIGHUP, SIGUSR1)"]:::mainNode
+### Flujo de funcionamiento
 
-    WORKER["SUBPROCESO RECOLECTOR (worker)<br/>• Lee /proc (stat, status, fd)<br/>• Calcula CPU% por diferencia<br/>• Respeta timers de cada vista"]:::subNode
+```text
+                +-----------------------+
+                |   Proceso Principal   |
+                |        (main)         |
+                +-----------+-----------+
+                            |
+               crea los subprocesos
+                            |
+            +---------------+---------------+
+            |                               |
+            v                               v
++-------------------------+      +-------------------------+
+|   Worker (Recolector)   |      |        UI (TUI)         |
+|-------------------------|      |-------------------------|
+| • Lee /proc             |      | • Muestra las vistas    |
+| • Calcula métricas      |      | • Lee el teclado        |
+| • Actualiza datos       |      | • Cambia filtros        |
++-----------+-------------+      +-------------+-----------+
+            \                           /
+             \                         /
+              \                       /
+               +---------------------+
+               |  Memoria Compartida |
+               |---------------------|
+               | snapshot_dict       |
+               | intervals_dict      |
+               | running_flag        |
+               +---------------------+
 
-    UI["SUBPROCESO DISPLAY / TUI (ui)<br/>• Renderiza la pantalla (curses)<br/>• Captura entrada de teclado<br/>• Permite ordenar, filtrar y fijar"]:::subNode
-
-    MEM["MEMORIA COMPARTIDA (multiprocessing)<br/>• snapshot_dict (Manager.dict)<br/>• intervals_dict (Value)<br/>• running_flag (Value)"]:::ipcNode
-
-    MAIN -->|Fork / Spawn| WORKER
-    MAIN -->|Fork / Spawn| UI
-    WORKER -->|Escribe métricas| MEM
-    UI -->|Lee métricas| MEM
-    UI -->|Modifica intervalos| MEM
 ```
 
 ---
 
-# ⚙️ Decisiones de Diseño
+#  Decisiones de Diseño
 
-## 🔀 Selección de Mecanismos de IPC
+##  Selección de Mecanismos de IPC
 
 Para la transferencia de métricas entre el proceso recolector y la interfaz utilicé un diccionario compartido gestionado por `multiprocessing.Manager`.
 
@@ -59,7 +78,7 @@ Para los intervalos de refresco y el estado de ejecución utilicé `multiprocess
 
 ---
 
-## 🛡️ Manejo de Race Conditions
+##  Manejo de Race Conditions
 
 Las condiciones de carrera se evitaron definiendo claramente los roles de lectura y escritura.
 
@@ -74,7 +93,7 @@ El handler únicamente escribe un byte dentro de un pipe (operación async-signa
 
 ---
 
-## ⏱️ Justificación de los Intervalos por Defecto
+##  Justificación de los Intervalos por Defecto
 
 | Vista | Intervalo |
 |--------|----------:|
@@ -95,9 +114,9 @@ El handler únicamente escribe un byte dentro de un pipe (operación async-signa
 
 ---
 
-# 📚 Conceptos del Curso Aplicados
+#  Conceptos del Curso Aplicados
 
-## 📂 Sistema de archivos virtual `/proc`
+##  Sistema de archivos virtual `/proc`
 
 Se accede directamente a los archivos del kernel sin utilizar bibliotecas como `psutil`.
 
@@ -105,7 +124,7 @@ En las vistas **Resumen** y **Scheduling** se interpreta `/proc/[pid]/stat` omit
 
 ---
 
-## 🧟 Procesos Zombie
+##  Procesos Zombie
 
 En la vista **Sistema Global** se contabilizan los procesos según su estado:
 
@@ -119,7 +138,7 @@ Los procesos en estado **Zombie (Z)** representan procesos finalizados cuyo padr
 
 ---
 
-## 🚦 Handlers Async-Signal-Safe
+##  Handlers Async-Signal-Safe
 
 Se implementó el manejo seguro de:
 
@@ -144,7 +163,7 @@ utilizando la frecuencia del reloj del kernel (`SC_CLK_TCK`).
 
 ---
 
-# ⚠️ Limitaciones Conocidas
+#  Limitaciones Conocidas
 
 ## Permisos sobre File Descriptors
 
@@ -164,7 +183,7 @@ El kernel limita el nombre almacenado en `/proc/[pid]/stat` a **16 caracteres**,
 
 ---
 
-# 🚀 Cómo Ejecutar el Proyecto
+#  Cómo Ejecutar el Proyecto
 
 ## 1. Construcción
 
@@ -180,7 +199,7 @@ docker attach monitor_proc_tui
 
 ---
 
-# ⌨️ Controles
+#  Controles
 
 | Tecla | Acción |
 |--------|--------|
@@ -196,7 +215,7 @@ docker attach monitor_proc_tui
 
 ---
 
-# 🧪 Pruebas de Señales
+#  Pruebas de Señales
 
 Desde otra terminal:
 
@@ -220,7 +239,7 @@ docker kill --signal=SIGINT monitor_proc_tui
 
 ---
 
-# 💻 Decisiones sobre la TUI
+#  Decisiones sobre la TUI
 
 Se eligió la biblioteca estándar **curses** porque:
 
@@ -237,7 +256,7 @@ Esto mantiene el contexto del sistema mientras se inspecciona información detal
 
 ---
 
-# 💡 Lo que Aprendí
+# Lo que Aprendí
 
 El desarrollo de este monitor permitió comprender cómo herramientas como **top** obtienen información directamente del sistema de archivos virtual `/proc`.
 
