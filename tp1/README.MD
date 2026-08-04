@@ -1,4 +1,4 @@
-#  Monitor de Procesos y Sistema en Tiempo Real
+#  Monitor de Procesos y Threads
 ### TP1 - Computación II
 
 ##  Descripción General
