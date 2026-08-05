@@ -19,6 +19,9 @@ El usuario puede:
 - Ajustar la frecuencia de refresco mediante las teclas **+** y **-**.
 
 ---
+## Captura de pantalla
+
+![Monitor funcionando](images/monitor_funcionando.png)
 
 #  Arquitectura
 
