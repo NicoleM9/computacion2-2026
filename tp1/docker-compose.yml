@@ -1,1 +1,19 @@
+version: '3.8'
 
+services:
+  monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: monitor_proc_tui
+    # Asignar TTY e interacción por consola (Imprescindible para Curses)
+    stdin_open: true
+    tty: true
+    # Mapear PIDs del Host para ver los procesos reales del sistema
+    pid: "host"
+    # Montar /proc del Host en solo lectura
+    volumes:
+      - /proc:/proc:ro
+      - .:/app
+    # Permiso para recibir y manejar señales del sistema
+    stop_signal: SIGINT
