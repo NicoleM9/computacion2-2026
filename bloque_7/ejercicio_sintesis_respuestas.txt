@@ -1,1 +1,27 @@
+Ejercicio de síntesis — respuestas teóricas
 
+1. ¿Se conserva siempre el dinero?
+
+No necesariamente. Las operaciones de lectura, resta y suma no forman una única operación atómica. Dos procesos pueden acceder simultáneamente a una misma cuenta y producir una race condition.
+
+2. ¿Qué pasa aumentando a 10000 transferencias?
+
+Al aumentar la cantidad de operaciones aumenta la cantidad de accesos concurrentes a la memoria compartida y se hace más probable observar problemas de sincronización.
+
+3. ¿Qué se podría utilizar para registrar las transferencias?
+
+Se podría utilizar una ShareableList o un archivo compartido para guardar datos como:
+
+origen
+destino
+monto
+
+Por ejemplo:
+
+Cuenta 1 -> Cuenta 3 : $25
+Cuenta 4 -> Cuenta 0 : $12
+Cuenta 2 -> Cuenta 1 : $40
+
+4. ¿Cómo solucionar la race condition?
+
+La solución sería utilizar sincronización, por ejemplo un Lock, de manera que solamente un proceso pueda modificar las cuentas durante una transferencia.
