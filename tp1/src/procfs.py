@@ -7,34 +7,67 @@ def obtener_pids():
     except Exception:
         return []
 
+def leer_proc_sched_policy(pid):
+    """Obtiene la política de planificación de /proc/[pid]/sched como fallback."""
+    try:
+        with open(f'/proc/{pid}/sched', 'r') as f:
+            for line in f:
+                if 'policy' in line and ':' in line:
+                    return int(line.split(':')[1].strip())
+    except Exception:
+        pass
+    return None
+
 def leer_proc_stat(pid):
-    """Parsea /proc/[pid]/stat para obtener datos básicos y de scheduling."""
+    """Parsea /proc/[pid]/stat para obtener datos básicos, métricas y política de scheduling."""
     try:
         with open(f'/proc/{pid}/stat', 'r') as f:
-            content = f.read()
-            rpar = content.rfind(')')
-            if rpar == -1:
-                return None
-            comm = content[content.find('(')+1:rpar]
-            rest = content[rpar+2:].split()
+            content = f.read() # Una sola lectura
             
-            return {
-                "pid": pid,
-                "comm": comm,
-                "state": rest[0],
-                "ppid": int(rest[1]),
-                "pgrp": int(rest[2]),
-                "session": int(rest[3]),
-                "minflt": int(rest[7]),
-                "majflt": int(rest[9]),
-                "utime": float(rest[11]),
-                "stime": float(rest[12]),
-                "priority": int(rest[15]),
-                "nice": int(rest[16]),
-                "num_threads": int(rest[17]),
-                "rt_priority": int(rest[37]) if len(rest) > 37 else 0,
-                "policy": int(rest[38]) if len(rest) > 38 else 0
-            }
+        rpar = content.rfind(')')
+        if rpar == -1:
+            return None
+            
+        idx_open = content.find('(')
+        comm = content[idx_open + 1:rpar]
+        rest = content[rpar + 2:].split()
+        
+        # Mapeo exacto desplazando el nombre (comm):
+        # rest[0]: state (campo 3)
+        # rest[1]: ppid (campo 4)
+        # rest[2]: pgrp (campo 5)
+        # rest[3]: session (campo 6)
+        # rest[7]: minflt (campo 10)
+        # rest[9]: majflt (campo 12)
+        # rest[11]: utime (campo 14)
+        # rest[12]: stime (campo 15)
+        # rest[15]: priority (campo 18)
+        # rest[16]: nice (campo 19)
+        # rest[17]: num_threads (campo 20)
+        # rest[37]: rt_priority (campo 40)
+        # rest[38]: policy (campo 41)
+        
+        policy_val = int(rest[38]) if len(rest) > 38 else None
+        if policy_val is None:
+            policy_val = leer_proc_sched_policy(pid) or 0
+
+        return {
+            "pid": pid,
+            "comm": comm,
+            "state": rest[0],
+            "ppid": int(rest[1]),
+            "pgrp": int(rest[2]),
+            "session": int(rest[3]),
+            "minflt": int(rest[7]),
+            "majflt": int(rest[9]),
+            "utime": float(rest[11]),
+            "stime": float(rest[12]),
+            "priority": int(rest[15]),
+            "nice": int(rest[16]),
+            "num_threads": int(rest[17]),
+            "rt_priority": int(rest[37]) if len(rest) > 37 else 0,
+            "policy": policy_val
+        }
     except Exception:
         return None
 
@@ -111,7 +144,7 @@ def leer_threads_detalle(pid):
                     with open(stat_path, 'r') as f:
                         c = f.read()
                         rpar = c.rfind(')')
-                        rest = c[rpar+2:].split()
+                        rest = c[rpar + 2:].split()
                         state = rest[0]
                         utime = float(rest[11])
                         stime = float(rest[12])
@@ -130,7 +163,7 @@ def leer_threads_detalle(pid):
     return threads
 
 def leer_maps_segmentos(pid):
-    """Agrupa mapas de memoria (/proc/[pid]/maps) por segmentos (heap, stack, text, data, shared)."""
+    """Agrupa mapas de memoria (/proc/[pid]/maps) por segmentos."""
     segmentos = {"text": 0, "data": 0, "heap": 0, "stack": 0, "shared": 0}
     try:
         with open(f'/proc/{pid}/maps', 'r') as f:
@@ -181,3 +214,55 @@ def leer_uptime():
             return float(f.read().split()[0])
     except Exception:
         return 0.0
+    
+# ==============================================================================
+# ALIAS Y FUNCIONES COMPATIBLES CON EL ARCHIVO DE TESTS
+# ==============================================================================
+
+# 1. get_all_pids
+get_all_pids = obtener_pids
+
+# 2. parse_stat
+parse_stat = leer_proc_stat
+
+# 3. parse_status
+def parse_status(pid):
+    status = leer_proc_status(pid)
+    if not status:
+        return {}
+    # Asegurar que devuelva 'uid' en minúscula si el test lo busca como status.get('uid')
+    if "Uid" in status and "uid" not in status:
+        status["uid"] = status["Uid"].split()[0]
+    return status
+
+# 4. parse_cmdline
+parse_cmdline = leer_proc_cmdline
+
+# 5. parse_fds
+parse_fds = leer_fds_detalle
+
+# 6. parse_threads
+parse_threads = leer_threads_detalle
+
+# 7. decode_signal_mask
+def decode_signal_mask(hex_str):
+    from src.analizadores.senales import decodificar_mascara_hex
+    return decodificar_mascara_hex(hex_str)
+
+# 8. parse_system_global
+def parse_system_global():
+    mem = leer_meminfo()
+    uptime = leer_uptime()
+    loadavg = "N/A"
+    try:
+        with open('/proc/loadavg', 'r') as f:
+            loadavg = f.read().strip()
+    except Exception:
+        pass
+    return {
+        "uptime": uptime,
+        "loadavg": loadavg,
+        "mem_total": mem.get("MemTotal", 0),
+        "mem_free": mem.get("MemFree", 0),
+        "memoria_global": mem
+    }

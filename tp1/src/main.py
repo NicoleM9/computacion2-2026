@@ -5,8 +5,10 @@ import multiprocessing as mp
 import curses
 
 from src.senales import SignalHandlerSelfPipe
-from src.recolector import worker_recolector
 from src.display import TUI
+
+# Importamos las funciones analizadoras directamente desde el recolector
+from src.recolector import TRABAJADORES_ANALIZADORES
 
 def main():
     config = {
@@ -45,22 +47,37 @@ def main():
     if hasattr(signal, 'SIGWINCH'):
         sig_handler.register_signal(signal.SIGWINCH)
 
-    p_recolector = mp.Process(
-        target=worker_recolector, 
-        args=(snapshot_dict, intervals, running_flag)
-    )
-    p_recolector.start()
+    # Lanzar los 7 trabajadores en paralelo
+    procesos = []
+    for nombre, funcion in TRABAJADORES_ANALIZADORES.items():
+        # Verificamos que exista el intervalo para esa vista; si no, usará un fallback de 1.0 s
+        intervalo_val = intervals.get(nombre, manager.Value('d', 1.0))
+        
+        p = mp.Process(
+            target=funcion, 
+            args=(snapshot_dict, intervalo_val, running_flag),
+            daemon=True  # Permite que los procesos no bloqueen la salida si el padre muere
+        )
+        p.start()
+        procesos.append(p)
 
     tui = TUI(snapshot_dict, intervals, running_flag, sig_handler)
     try:
         curses.wrapper(tui.run)
     finally:
+        # Señalar a los workers que se detengan
         running_flag.value = False
         sig_handler.close()
         
-        p_recolector.join(timeout=1.0)
-        if p_recolector.is_alive():
-            p_recolector.terminate()
+        # Limpieza rigurosa de los 7 procesos para evitar zombies
+        for p in procesos:
+            p.join(timeout=0.5)
+            if p.is_alive():
+                p.terminate()
+                p.join(timeout=0.2)
+                if p.is_alive():
+                    p.kill()
+                    p.join()
 
 if __name__ == "__main__":
     main()

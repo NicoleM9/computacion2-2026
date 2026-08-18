@@ -41,6 +41,24 @@ class SignalHandlerSelfPipe:
                 return None
         return None
 
+    def get_signal(self):
+        """Lee el byte del pipe y devuelve el objeto signal.SIG* correspondiente."""
+        b = self.read_signal_byte()
+        if not b:
+            return None
+        
+        mapping = {
+            b'I': signal.SIGINT,
+            b'T': signal.SIGTERM,
+            b'H': signal.SIGHUP,
+            b'1': signal.SIGUSR1,
+            b'2': signal.SIGUSR2,
+        }
+        if hasattr(signal, 'SIGWINCH'):
+            mapping[b'W'] = signal.SIGWINCH
+            
+        return mapping.get(b)
+
     def close(self):
         for sig, old in self.old_handlers.items():
             signal.signal(sig, old)

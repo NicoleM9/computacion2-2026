@@ -213,8 +213,11 @@ class TUI:
         num, char, key_code, label = self.vistas[self.vista_actual_idx]
         int_val = self.intervals[key_code].value if key_code in self.intervals else 0.0
 
-        # Bar Superior
-        header = f" MONITOR | Vista: [{num}/{char}:{label}] | Orden: [{self.sort_mode}] | Refresco: {int_val}s (+/-) | Pin PID: {self.pinned_pid or 'Ninguno'} | [h/?] Ayuda | [q] Salir"
+        # Muestra en la barra superior el estado de Verbose (activado por SIGUSR2)
+        v_status = " [VERBOSE: ON]" if self.verbose else " [VERBOSE: OFF]"
+
+        # Barra Superior
+        header = f" MONITOR | Vista: [{num}/{char}:{label}]{v_status} | Orden: [{self.sort_mode}] | Refresco: {int_val}s (+/-) | Pin PID: {self.pinned_pid or 'Ninguno'} | [h/?] Ayuda | [q] Salir"
         try:
             stdscr.addstr(0, 0, header[:max_x-1], curses.A_REVERSE)
         except curses.error:
@@ -301,7 +304,12 @@ class TUI:
                     if isinstance(info, dict):
                         for i, (k, v) in enumerate(info.items()):
                             if bottom_start + 3 + i < max_y - 1:
-                                stdscr.addstr(bottom_start + 3 + i, 4, f"{k}: {str(v)[:max_x-20]}")
+                                # Si VERBOSE está activo, se muestra la clave completa sin recortar
+                                if self.verbose:
+                                    texto = f"[VERBOSE] {k.upper()}: {v}"
+                                else:
+                                    texto = f"{k}: {str(v)[:max_x-20]}"
+                                stdscr.addstr(bottom_start + 3 + i, 4, texto[:max_x-10])
                     else:
                         stdscr.addstr(bottom_start + 3, 4, str(info)[:max_x-10])
                 except curses.error:

@@ -1,15 +1,22 @@
 import os
 import time
-import json
-import glob
 import multiprocessing as mp
 
-# Diccionario local en el proceso recolector para recordar tiempos anteriores
-# Estructura: { pid: (total_ticks_anterior, timestamp_anterior) }
+# Historial local para cálculo de CPU %
 prev_cpu_times = {}
 
+SCHED_POLICIES = {
+    0: "SCHED_OTHER",
+    1: "SCHED_FIFO",
+    2: "SCHED_RR",
+    3: "SCHED_BATCH",
+    5: "SCHED_IDLE",
+    6: "SCHED_DEADLINE"
+}
+
+# --- FUNCIONES DE LECTURA DE /proc ---
+
 def get_system_uptime():
-    """Lee el uptime global del sistema desde /proc/uptime"""
     try:
         with open("/proc/uptime", "r") as f:
             return float(f.read().split()[0])
@@ -17,7 +24,6 @@ def get_system_uptime():
         return 0.0
 
 def get_system_loadavg():
-    """Lee la carga del sistema desde /proc/loadavg"""
     try:
         with open("/proc/loadavg", "r") as f:
             parts = f.read().split()
@@ -25,13 +31,20 @@ def get_system_loadavg():
     except Exception:
         return "N/A"
 
+def obtener_pids():
+    pids = []
+    try:
+        for entry in os.listdir("/proc"):
+            if entry.isdigit():
+                pids.append(int(entry))
+    except Exception:
+        pass
+    return pids
+
 def calcular_cpu_porcentaje(pid, utime_ticks, stime_ticks):
-    """Calcula el % de CPU por diferencia entre lecturas consecutivas"""
     global prev_cpu_times
     now = time.time()
     total_ticks = utime_ticks + stime_ticks
-    
-    # Frecuencia de reloj del kernel (normalmente 100 Hz en Linux)
     clk_tck = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100.0
     cpu_percent = 0.0
 
@@ -44,17 +57,14 @@ def calcular_cpu_porcentaje(pid, utime_ticks, stime_ticks):
             cpu_seconds = delta_ticks / clk_tck
             cpu_percent = (cpu_seconds / delta_time) * 100.0
 
-    # Actualizar historial
     prev_cpu_times[pid] = (total_ticks, now)
     return round(max(0.0, cpu_percent), 1)
 
 def parse_proc_stat(pid):
-    """Parsea /proc/[pid]/stat de forma segura considerando espacios en el comm"""
     try:
         with open(f"/proc/{pid}/stat", "r") as f:
             content = f.read().strip()
             
-        # El campo 'comm' está entre paréntesis y puede contener espacios
         rpar = content.rfind(')')
         if rpar == -1:
             return None
@@ -62,25 +72,28 @@ def parse_proc_stat(pid):
         comm = content[content.find('(')+1:rpar]
         rest = content[rpar+2:].split()
         
-        state = rest[0]
-        ppid = int(rest[1])
-        utime = int(rest[11])
-        stime = int(rest[12])
-        num_threads = int(rest[17])
-        
+        policy_id = 0
+        if len(rest) > 38:
+            try:
+                policy_id = int(rest[38])
+            except ValueError:
+                policy_id = 0
+
         return {
             "comm": comm,
-            "state": state,
-            "ppid": ppid,
-            "utime": utime,
-            "stime": stime,
-            "threads": num_threads
+            "state": rest[0],
+            "ppid": int(rest[1]),
+            "utime": int(rest[11]),
+            "stime": int(rest[12]),
+            "priority": int(rest[15]),
+            "nice": int(rest[16]),
+            "threads": int(rest[17]),
+            "policy": SCHED_POLICIES.get(policy_id, f"UNKNOWN({policy_id})")
         }
     except Exception:
         return None
 
 def parse_proc_status(pid):
-    """Parsea /proc/[pid]/status para extraer UID, RSS y señales"""
     data = {}
     try:
         with open(f"/proc/{pid}/status", "r") as f:
@@ -92,55 +105,94 @@ def parse_proc_status(pid):
         pass
     return data
 
-def parse_proc_fds(pid):
-    """Lista los File Descriptors abiertos de un proceso"""
+def parse_cmdline(pid):
     try:
-        fds = []
-        fd_dir = f"/proc/{pid}/fd"
+        with open(f"/proc/{pid}/cmdline", "r") as f:
+            content = f.read().replace('\x00', ' ').strip()
+            return content if content else "[sin cmdline]"
+    except Exception:
+        return "[desconocido]"
+
+def parse_proc_fds(pid):
+    """Devuelve la lista formateada para los tests/trabajadores."""
+    fds = []
+    fd_dir = f"/proc/{pid}/fd"
+    try:
         if os.path.exists(fd_dir):
             for fd_name in os.listdir(fd_dir):
                 try:
                     target = os.readlink(os.path.join(fd_dir, fd_name))
-                    fds.append(f"{fd_name} -> {target}")
+                    fds.append({"fd": fd_name, "target": target, "type": "link"})
                 except Exception:
-                    fds.append(fd_name)
-        return fds
+                    fds.append({"fd": fd_name, "target": "desconocido", "type": "desconocido"})
+    except Exception:
+        pass
+    return fds
+
+def parse_threads(pid):
+    threads = []
+    task_dir = f"/proc/{pid}/task"
+    try:
+        if os.path.exists(task_dir):
+            for tid in os.listdir(task_dir):
+                if tid.isdigit():
+                    threads.append(int(tid))
+    except Exception:
+        pass
+    return threads
+
+def decode_signal_mask(mask_hex):
+    try:
+        val = int(mask_hex, 16)
+        signals = []
+        for i in range(1, 32):
+            if val & (1 << (i - 1)):
+                signals.append(i)
+        return signals
     except Exception:
         return []
 
-def worker_recolector(snapshot_dict, intervals_dict, running_flag):
-    """Worker principal que corre en un subproceso independiente recopilando métricas"""
-    last_runs = {
-        "resumen": 0, "memoria": 0, "fds": 0,
-        "threads": 0, "senales": 0, "scheduling": 0, "sistema": 0
+def parse_system_global():
+    mem_total = "0 kB"
+    mem_free = "0 kB"
+    try:
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    mem_total = line.split(":", 1)[1].strip()
+                elif line.startswith("MemFree:"):
+                    mem_free = line.split(":", 1)[1].strip()
+    except Exception:
+        pass
+
+    return {
+        "uptime": get_system_uptime(),
+        "loadavg": get_system_loadavg(),
+        "mem_total": mem_total,
+        "mem_free": mem_free
     }
 
-    while running_flag.value:
-        now = time.time()
-        
-        # 1. Obtener lista de PIDs activos en el sistema
-        pids = []
-        for entry in os.listdir("/proc"):
-            if entry.isdigit():
-                pids.append(int(entry))
 
-        # ---------------- VISTA 1: RESUMEN ----------------
-        int_resumen = intervals_dict["resumen"].value if "resumen" in intervals_dict else 2.0
-        if now - last_runs["resumen"] >= int_resumen:
+# --- TRABAJADORES (WORKERS) PARA LOS PROCESOS HIJOS ---
+
+def obtener_intervalo(interval_val):
+    """Auxiliar para tolerar tanto floats simples como mp.Value."""
+    if hasattr(interval_val, "value"):
+        return interval_val.value
+    return float(interval_val) if interval_val else 1.0
+
+def worker_resumen(snapshot_dict, interval_val, running_flag):
+    while running_flag.value:
+        try:
+            pids = obtener_pids()
             resumen_list = []
             for pid in pids:
                 stat = parse_proc_stat(pid)
                 if not stat:
                     continue
                 status = parse_proc_status(pid)
-                
-                # UID
-                uid = status.get("Uid", "0").split()[0]
-                
-                # Memoria RSS
-                vm_rss = status.get("VmRSS", "0 kB")
-                
-                # Porcentaje de CPU
+                uid = status.get("Uid", "0").split()[0] if status else "0"
+                vm_rss = status.get("VmRSS", "0 kB") if status else "0 kB"
                 cpu_pct = calcular_cpu_porcentaje(pid, stat["utime"], stat["stime"])
 
                 resumen_list.append({
@@ -154,18 +206,20 @@ def worker_recolector(snapshot_dict, intervals_dict, running_flag):
                     "comm": stat["comm"]
                 })
 
-            # Limpiar PIDs muertos del historial de CPU para ahorrar memoria
             pids_set = set(pids)
             for old_pid in list(prev_cpu_times.keys()):
                 if old_pid not in pids_set:
                     del prev_cpu_times[old_pid]
 
             snapshot_dict["resumen"] = resumen_list
-            last_runs["resumen"] = now
+        except Exception as e:
+            pass
+        time.sleep(obtener_intervalo(interval_val))
 
-        # ---------------- VISTA 2: MEMORIA ----------------
-        int_mem = intervals_dict["memoria"].value if "memoria" in intervals_dict else 3.0
-        if now - last_runs["memoria"] >= int_mem:
+def worker_memoria(snapshot_dict, interval_val, running_flag):
+    while running_flag.value:
+        try:
+            pids = obtener_pids()
             mem_dict = {}
             for pid in pids:
                 status = parse_proc_status(pid)
@@ -179,24 +233,30 @@ def worker_recolector(snapshot_dict, intervals_dict, running_flag):
                         "vmlib": status.get("VmLib", "0 kB")
                     }
             snapshot_dict["memoria"] = mem_dict
-            last_runs["memoria"] = now
+        except Exception:
+            pass
+        time.sleep(obtener_intervalo(interval_val))
 
-        # ---------------- VISTA 3: FILE DESCRIPTORS ----------------
-        int_fds = intervals_dict["fds"].value if "fds" in intervals_dict else 5.0
-        if now - last_runs["fds"] >= int_fds:
+def worker_fds(snapshot_dict, interval_val, running_flag):
+    while running_flag.value:
+        try:
+            pids = obtener_pids()
             fds_dict = {}
-            for pid in pids[:100]:  # Escanear primeros 100 procesos para evitar sobrecarga de I/O
+            for pid in pids[:100]:
                 fds = parse_proc_fds(pid)
                 fds_dict[pid] = {
                     "total_fds": len(fds),
-                    "fds": fds[:20]  # Mostrar primeros 20 FDs
+                    "fds": [f"{f['fd']} -> {f['target']}" for f in fds[:20]]
                 }
             snapshot_dict["fds"] = fds_dict
-            last_runs["fds"] = now
+        except Exception:
+            pass
+        time.sleep(obtener_intervalo(interval_val))
 
-        # ---------------- VISTA 4: THREADS ----------------
-        int_thr = intervals_dict["threads"].value if "threads" in intervals_dict else 2.0
-        if now - last_runs["threads"] >= int_thr:
+def worker_threads(snapshot_dict, interval_val, running_flag):
+    while running_flag.value:
+        try:
+            pids = obtener_pids()
             thr_dict = {}
             for pid in pids:
                 stat = parse_proc_stat(pid)
@@ -205,11 +265,14 @@ def worker_recolector(snapshot_dict, intervals_dict, running_flag):
                         "total_threads": stat["threads"]
                     }
             snapshot_dict["threads"] = thr_dict
-            last_runs["threads"] = now
+        except Exception:
+            pass
+        time.sleep(obtener_intervalo(interval_val))
 
-        # ---------------- VISTA 5: SEÑALES ----------------
-        int_sig = intervals_dict["senales"].value if "senales" in intervals_dict else 10.0
-        if now - last_runs["senales"] >= int_sig:
+def worker_senales(snapshot_dict, interval_val, running_flag):
+    while running_flag.value:
+        try:
+            pids = obtener_pids()
             sig_dict = {}
             for pid in pids:
                 status = parse_proc_status(pid)
@@ -221,35 +284,32 @@ def worker_recolector(snapshot_dict, intervals_dict, running_flag):
                         "SigPnd": status.get("SigPnd", "0000000000000000")
                     }
             snapshot_dict["senales"] = sig_dict
-            last_runs["senales"] = now
+        except Exception:
+            pass
+        time.sleep(obtener_intervalo(interval_val))
 
-        # ---------------- VISTA 6: SCHEDULING ----------------
-        int_sch = intervals_dict["scheduling"].value if "scheduling" in intervals_dict else 10.0
-        if now - last_runs["scheduling"] >= int_sch:
+def worker_scheduling(snapshot_dict, interval_val, running_flag):
+    while running_flag.value:
+        try:
+            pids = obtener_pids()
             sch_dict = {}
             for pid in pids:
-                try:
-                    with open(f"/proc/{pid}/stat", "r") as f:
-                        parts = f.read().split()
-                        # nice: campo 18, priority: campo 17 (base 0)
-                        rpar = f.read().rfind(')')
-                        rest = parts[rpar:] if rpar != -1 else parts[2:]
-                        nice = parts[18] if len(parts) > 18 else "0"
-                        priority = parts[17] if len(parts) > 17 else "0"
-                        
-                        sch_dict[pid] = {
-                            "nice": nice,
-                            "priority": priority,
-                            "policy": "SCHED_OTHER"
-                        }
-                except Exception:
-                    pass
+                stat = parse_proc_stat(pid)
+                if stat:
+                    sch_dict[pid] = {
+                        "nice": str(stat["nice"]),
+                        "priority": str(stat["priority"]),
+                        "policy": stat["policy"]
+                    }
             snapshot_dict["scheduling"] = sch_dict
-            last_runs["scheduling"] = now
+        except Exception:
+            pass
+        time.sleep(obtener_intervalo(interval_val))
 
-        # ---------------- VISTA 7: SISTEMA GLOBAL ----------------
-        int_sys = intervals_dict["sistema"].value if "sistema" in intervals_dict else 1.0
-        if now - last_runs["sistema"] >= int_sys:
+def worker_sistema(snapshot_dict, interval_val, running_flag):
+    while running_flag.value:
+        try:
+            pids = obtener_pids()
             estados = {"R": 0, "S": 0, "D": 0, "Z": 0, "T": 0, "Otros": 0}
             for pid in pids:
                 stat = parse_proc_stat(pid)
@@ -266,7 +326,16 @@ def worker_recolector(snapshot_dict, intervals_dict, running_flag):
                 "totales_pids": len(pids),
                 "conteo_estados": estados
             }
-            last_runs["sistema"] = now
+        except Exception:
+            pass
+        time.sleep(obtener_intervalo(interval_val))
 
-        # Pequeña pausa para no saturar el core de CPU
-        time.sleep(0.1)
+TRABAJADORES_ANALIZADORES = {
+    "resumen": worker_resumen,
+    "memoria": worker_memoria,
+    "fds": worker_fds,
+    "threads": worker_threads,
+    "senales": worker_senales,
+    "scheduling": worker_scheduling,
+    "sistema": worker_sistema
+}

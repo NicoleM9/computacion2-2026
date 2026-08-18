@@ -4,12 +4,13 @@ import sys
 # Agregar la raíz al path para no tener problemas de importación
 sys.path.insert(0, os.path.abspath("."))
 
-from src.procfs import (
-    get_all_pids,
-    parse_stat,
-    parse_status,
+# Ajustá las funciones importadas a los nombres reales en tu src/recolector.py
+from src.recolector import (
+    obtener_pids,
+    parse_proc_stat,
+    parse_proc_status,
     parse_cmdline,
-    parse_fds,
+    parse_proc_fds,
     parse_threads,
     decode_signal_mask,
     parse_system_global,
@@ -17,30 +18,30 @@ from src.procfs import (
 
 def test_procfs():
     print("=== TEST 1: Lista de PIDs ===")
-    pids = get_all_pids()
+    pids = obtener_pids()
     print(f"PIDs encontrados: {len(pids)} (Primeros 5: {pids[:5]})\n")
 
-    # Usamos nuestro propio PID para la prueba (garantiza que exista y tengamos permisos)
+    # Usamos nuestro propio PID para la prueba
     my_pid = os.getpid()
     print(f"=== TEST 2: Leyendo nuestro propio proceso (PID {my_pid}) ===")
     
     # 1. stat
-    stat = parse_stat(my_pid)
-    print(f"[parse_stat] Comm: {stat.get('comm') if stat else 'Error'}, State: {stat.get('state') if stat else 'Error'}")
+    stat = parse_proc_stat(my_pid)
+    print(f"[parse_proc_stat] Comm: {stat.get('comm') if stat else 'Error'}, State: {stat.get('state') if stat else 'Error'}")
 
     # 2. status
-    status = parse_status(my_pid)
-    print(f"[parse_status] RSS: {status.get('VmRSS') if status else 'Error'}, Uid: {status.get('uid') if status else 'Error'}")
+    status = parse_proc_status(my_pid)
+    print(f"[parse_proc_status] RSS: {status.get('vm_rss', status.get('VmRSS')) if status else 'Error'}, Uid: {status.get('uid', status.get('Uid')) if status else 'Error'}")
 
     # 3. cmdline
     cmd = parse_cmdline(my_pid)
     print(f"[parse_cmdline]: {cmd}")
 
     # 4. FDs
-    fds = parse_fds(my_pid)
-    print(f"[parse_fds] FDs abiertos: {len(fds)}")
-    for fd in fds[:3]:  # Mostrar los primeros 3
-        print(f"   FD {fd['fd']} -> {fd['target']} ({fd['type']})")
+    fds = parse_proc_fds(my_pid)
+    print(f"[parse_proc_fds] FDs abiertos: {len(fds)}")
+    for fd in fds[:3]:
+        print(f"   FD {fd.get('fd')} -> {fd.get('target')} ({fd.get('type')})")
 
     # 5. Threads
     threads = parse_threads(my_pid)
