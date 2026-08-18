@@ -24,5 +24,13 @@
 | Bloque 1   | Completo |
 | Bloque 2   | Completo |
 | Bloque 3   | Completo |
-| TP1        | Pendiente |
+| Bloque 4   | Completo |
+| Bloque 5   | Completo |
+| Bloque 6   | Completo |
+| Bloque 7   | Completo |
+| Bloque 8   | Pendiente |
+| Bloque 9   | Completo |
+| Bloque 10  | Completo |
+| Bloque 11  | Completo |
+| TP1        | Completo |
 | TP2        | Pendiente |
