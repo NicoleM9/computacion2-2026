@@ -1,1 +1,28 @@
 
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      NUM_WORKERS: "4"
+      TAMANO_COLA: "1000"
+      TIMEOUT_DEFECTO: "60"
+      LIMITE_APAGADO: "10"
+      DIR_VOLCADOS: /srv/volcados
+      MODO_BLOQUEANTE: "0"
+    volumes:
+      - ./volcados:/srv/volcados
+    depends_on:
+      - latencia
+    # Debe ser mayor que LIMITE_APAGADO, o Docker mata el proceso antes del volcado.
+    stop_grace_period: 20s
+
+  # Servidor local de latencia fija, para que las mediciones no dependan de internet.
+  latencia:
+    image: python:3.12-slim
+    volumes:
+      - ./latencia:/srv:ro
+    command: ["python", "/srv/servidor.py"]
+    ports:
+      - "8080:8080"

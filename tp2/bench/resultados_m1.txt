@@ -1,0 +1,10 @@
+MEDICIÓN 1: 20 descargas de http://latencia:8080/delay/1 (cada una tarda ~1s en el servidor)
+  rep 1: secuencial=20.52s  concurrente=1.04s  20 tareas por el pool=5.21s
+  rep 2: secuencial=20.49s  concurrente=1.07s  20 tareas por el pool=5.21s
+  rep 3: secuencial=20.50s  concurrente=1.05s  20 tareas por el pool=5.17s
+
+RESULTADO (mediana de las repeticiones)
+  A) 20 descargas secuenciales .......... 20.50 s
+  B) 20 descargas concurrentes (1 tarea) . 1.05 s
+  C) 20 tareas de 1 URL por el pool ...... 5.21 s
+  Speedup B vs A: 19.6x

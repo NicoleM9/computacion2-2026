@@ -1,0 +1,6 @@
+RÁFAGA: 1500 tareas 'esperar' de 5s enviadas lo más rápido posible
+  aceptadas=1004  rechazadas=496 (HTTP 429 cola llena)
+  tiempo de envío: 1.30s (1158 POST/s)
+  latencia GET /tareas con 1004 tareas: 75.2 ms
+  cancelando todas para no esperar horas...
+  estadísticas finales: {'pendiente': 0, 'ejecutando': 0, 'completada': 1149, 'fallida': 0, 'cancelada': 1004}

@@ -1,0 +1,14 @@
+MEDICIÓN 3A: M tareas 'esperar' de 0.5s lanzadas a la vez
+workers del pool: 4   (tiempo ideal = ceil(M/4) * 0.5s)
+
+    M  total(s)  ideal(s)  espera media(s)  espera máx(s)  GET /tareas(ms)
+    4      0.64      0.50             0.00           0.00             15.4
+    8      1.08      1.00             0.25           0.50              9.4
+   16      2.18      2.00             0.75           1.51              9.7
+   32      4.05      4.00             1.74           3.49             11.4
+   64      8.08      8.00             3.73           7.47              9.1
+  128     16.18     16.00             7.72          15.46             15.8
+  256     32.29     32.00            15.69          31.37             23.4
+  512     64.21     64.00            31.57          63.19             35.4
+
+tareas acumuladas en memoria: 1143
