@@ -266,9 +266,6 @@ Es el lugar donde mi código puede bloquear el loop (ver limitaciones).
 
 ## 5. Conceptos del curso aplicados
 
-COMPLETAR: reemplazá cada `[Clase N]` por el nombre o número real de tu clase y
-agregá lo que quieras. Las relaciones ya están pensadas:
-
 - **Productor-consumidor:** la API produce (`put_nowait`) y el pool de
   workers consume (`await get()`) de una `asyncio.Queue` compartida. Es el mismo
   patrón de la clase 11, pero con corrutinas en vez de threads: acá no hace falta
@@ -276,7 +273,7 @@ agregá lo que quieras. Las relaciones ya están pensadas:
   seguro porque no hay ningún `await` entre leer y escribir.
 - **Threads y GIL:** el hash es CPU-bound; con threads el GIL impediría
   paralelismo real, por eso uso procesos con `ProcessPoolExecutor`.
-- **Procesos y comunicación entre procesos ([Clase N]):** el `multiprocessing.Event`
+- **Procesos y comunicación entre procesos:** el `multiprocessing.Event`
   (vía `Manager`) permite avisarle al proceso hijo que corte el hash.
 - **Señales:** SIGTERM y SIGINT disparan el apagado ordenado.
 - **Docker y PID 1:** `CMD` en formato exec para que Python reciba SIGTERM;
@@ -327,6 +324,6 @@ agregá lo que quieras. Las relaciones ya están pensadas:
 
 Hacer este TP me sirvió para entender en la práctica cómo funciona asyncio y cómo cambia el rendimiento según cómo se maneja la concurrencia. Ver los resultados de las mediciones me dejó muy en claro el impacto del event loop: ejecutar el hash de forma bloqueante elevó la latencia de un simple GET de 3 ms a casi 13 segundos, lo que confirmó lo importante que es mandar las tareas de CPU a un ProcessPoolExecutor.
 
-También aprendí bastante sobre el manejo de cancelaciones y el apagado del servicio. Resolver el problema con docker compose stop, donde el contenedor terminaba en código 137 porque el worker capturaba mal la cancelación, me obligó a entender a fondo cómo se comportan los CancelledError y cómo asegurar que los recursos se liberen bien, tanto en descargas como en el pool de procesos.
+También aprendí bastante sobre el manejo de cancelaciones y el apagado del servicio. Resolver el problema con docker compose stop —donde el contenedor terminaba en código 137 porque el worker capturaba mal la cancelación— me obligó a entender a fondo cómo se comportan los CancelledError y cómo asegurar que los recursos se liberen bien, tanto en descargas como en el pool de procesos.
 
 Por último, las pruebas de carga me mostraron cuellos de botella que no esperaba. Ver que GET /tareas se frenaba a medida que se juntaban tareas en memoria me hizo dar cuenta de que faltaba paginación y una forma de limpiar el diccionario. Si tuviera que hacerlo de nuevo, agregaría eso desde el principio, pero el trabajo me sirvió para entender bien qué pasa por detrás en cada parte del sistema.
