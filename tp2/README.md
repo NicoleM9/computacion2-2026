@@ -176,6 +176,11 @@ necesitara el trabajo.
 
 ## 4. Mediciones
 
+Entorno: 12 CPUs visibles para el contenedor, 7,1 GiB de RAM, Linux (Ubuntu 24.04) y
+Docker 29.1.3. Las descargas se midieron contra un servidor local de latencia fija
+(`latencia/servidor.py`, 1 s por respuesta), para que los números no dependan de
+internet.
+
 ### Medición 1: concurrencia I/O (`python3 bench/bench.py m1`)
 20 descargas de una URL con 1 s de latencia, mediana de 3 repeticiones:
 
