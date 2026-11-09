@@ -28,9 +28,22 @@
 | Bloque 5   | Completo |
 | Bloque 6   | Completo |
 | Bloque 7   | Completo |
-| Bloque 8   | Pendiente |
+| Bloque 8   | Completo |
 | Bloque 9   | Completo |
 | Bloque 10  | Completo |
 | Bloque 11  | Completo |
+| Bloque 12  | Completo |
+| Bloque 13  | Completo |
+| Bloque 14  | Completo |
+| Bloque 15  | Completo |
+| Bloque 16  | Completo |
+| Bloque 17  | Completo |
+| Bloque 18  | Completo |
+| Bloque 19  | Completo |
+| Bloque 20  | Completo |
+| Bloque 21  | Completo |
+| Bloque 22  | Completo |
+| Bloque 23  | Completo |
+| Bloque 24  | Completo |
 | TP1        | Completo |
-| TP2        | Pendiente |
+| TP2        | Completo |
